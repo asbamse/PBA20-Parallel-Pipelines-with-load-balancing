@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.Net;
 using System.Text;
+using System.Threading;
 
 namespace PBA20_Parallel_Pipelines_with_load_balancing
 {
@@ -18,7 +20,8 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         /// <returns>Image.</returns>
         public static Bitmap LoadFileAsImage(Uri fileLocation)
         {
-            throw new NotImplementedException();
+            Thread.Sleep(2000);
+            return new Bitmap(256, 256);
         }
 
         /// <summary>
@@ -28,7 +31,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         /// <param name="fileLocation">The location to save file.</param>
         public static void SaveBitmapToFile(Bitmap bitmap, Uri fileLocation)
         {
-            throw new NotImplementedException();
+            Thread.Sleep(2000);
         }
 
         /// <summary>
@@ -38,7 +41,8 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         /// <returns>Processed image.</returns>
         public static Bitmap ResizeToThumbnail(Bitmap bitmap)
         {
-            throw new NotImplementedException();
+            Thread.Sleep(2000);
+            return new Bitmap(256, 256);
         }
 
         /// <summary>
@@ -49,7 +53,8 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         /// <returns>Processed image.</returns>
         public static Bitmap RemoveBackground(Bitmap bitmap, Bitmap background)
         {
-            throw new NotImplementedException();
+            Thread.Sleep(2000);
+            return new Bitmap(256, 256);
         }
     }
 }
