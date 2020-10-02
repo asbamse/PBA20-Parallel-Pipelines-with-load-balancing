@@ -12,6 +12,26 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
     public static class ImageProcessor
     {
         /// <summary>
+        /// Loads a file as bitmap.
+        /// </summary>
+        /// <param name="fileLocation">The files location.</param>
+        /// <returns>Image.</returns>
+        public static Bitmap LoadFileAsImage(Uri fileLocation)
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// Save bitmap as JPEG.
+        /// </summary>
+        /// <param name="bitmap">The image to use.</param>
+        /// <param name="fileLocation">The location to save file.</param>
+        public static void SaveBitmapAsJPEG(Bitmap bitmap, Uri fileLocation)
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
         /// Resizes/compress bitmap to thumbnail size.
         /// </summary>
         /// <param name="bitmap">The image to use.</param>
