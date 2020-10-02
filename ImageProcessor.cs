@@ -22,11 +22,11 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         }
 
         /// <summary>
-        /// Save bitmap as JPEG.
+        /// Save bitmap to file.
         /// </summary>
         /// <param name="bitmap">The image to use.</param>
         /// <param name="fileLocation">The location to save file.</param>
-        public static void SaveBitmapAsJPEG(Bitmap bitmap, Uri fileLocation)
+        public static void SaveBitmapAsBitmap(Bitmap bitmap, Uri fileLocation)
         {
             throw new NotImplementedException();
         }
