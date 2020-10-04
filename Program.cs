@@ -1,5 +1,4 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 using System;
 using System.Diagnostics;
 using System.Drawing;
@@ -11,13 +10,15 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
     {
         private static string InputDirectory { get; set; }
         private static string OutputDirectory { get; set; }
+        private static string BackgroundFilePath { get; set; }
 
         static void Main(string[] args)
         {
             LoadAppSettings();
+            Console.WriteLine(""); // Seperator
 
             Console.WriteLine("Executing all operations sequentially.");
-            MeasureTime(ExecuteSequentialOperation);
+            MeasureTime(ExecuteSequentialAllOperation);
             Console.WriteLine("Finished executing all operations sequentially.");
         }
 
@@ -31,19 +32,42 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             InputDirectory = o1.Value<string>("InputDirectory");
             Console.WriteLine("Input from: " + InputDirectory);
             OutputDirectory = o1.Value<string>("OutputDirectory");
-            Console.WriteLine("Output from: " + OutputDirectory);
+            Console.WriteLine("Output to: " + OutputDirectory);
+            BackgroundFilePath = o1.Value<string>("BackgroundFilePath");
+            Console.WriteLine("Background bitmap from: " + BackgroundFilePath);
         }
 
         /// <summary>
         /// Executes all operations sequentially.
         /// </summary>
-        private static void ExecuteSequentialOperation()
+        private static void ExecuteSequentialAllOperation()
         {
-            Bitmap target_bm = ImageProcessor.LoadFileAsImage(new Uri("C:\\image.bmp"));
-            Bitmap background_bm = ImageProcessor.LoadFileAsImage(new Uri("C:\\backgroundFilter.bmp"));
+            foreach (string filePath in Directory.GetFiles(InputDirectory))
+            {
+                Bitmap background_bm = ImageProcessor.LoadFileAsImage(BackgroundFilePath);
+                ExecuteSequentialOperation(filePath, background_bm);
+                Console.WriteLine(""); // Seperator
+            }
+        }
+
+        /// <summary>
+        /// Executes all operations sequentially.
+        /// </summary>
+        private static void ExecuteSequentialOperation(string filePath, Bitmap background_bm)
+        {
+            Console.WriteLine($"Processing: {Path.GetFileName(filePath)}");
+            Bitmap target_bm = ImageProcessor.LoadFileAsImage(filePath);
+
             target_bm = ImageProcessor.RemoveBackground(target_bm, background_bm);
-            target_bm = ImageProcessor.ResizeToThumbnail(target_bm);
-            ImageProcessor.SaveBitmapToFile(target_bm, new Uri("C:\\processed_image.bmp"));
+            Bitmap target_thumb_bm = ImageProcessor.ResizeToThumbnail(target_bm);
+
+            string output = OutputDirectory + Path.DirectorySeparatorChar + Path.GetFileName(filePath);
+            string output_thumb = OutputDirectory + Path.DirectorySeparatorChar + Path.GetFileNameWithoutExtension(filePath) + "_thumbnail" + Path.GetExtension(filePath);
+            ImageProcessor.SaveBitmapToFile(target_bm, output);
+            ImageProcessor.SaveBitmapToFile(target_thumb_bm, output_thumb);
+
+            Console.WriteLine($"Finished processing: {filePath}");
+            Console.WriteLine($"Processed image saved to: {output}");
         }
 
         /// <summary>

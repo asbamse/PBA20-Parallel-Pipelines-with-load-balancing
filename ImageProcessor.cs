@@ -14,7 +14,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         /// </summary>
         /// <param name="fileLocation">The files location.</param>
         /// <returns>Image.</returns>
-        public static Bitmap LoadFileAsImage(Uri fileLocation)
+        public static Bitmap LoadFileAsImage(string fileLocation)
         {
             Thread.Sleep(2000);
             return new Bitmap(256, 256);
@@ -25,7 +25,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         /// </summary>
         /// <param name="bitmap">The image to use.</param>
         /// <param name="fileLocation">The location to save file.</param>
-        public static void SaveBitmapToFile(Bitmap bitmap, Uri fileLocation)
+        public static void SaveBitmapToFile(Bitmap bitmap, string fileLocation)
         {
             Thread.Sleep(2000);
         }
