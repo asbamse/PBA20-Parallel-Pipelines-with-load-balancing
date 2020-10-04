@@ -51,8 +51,10 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         }
 
         /// <summary>
-        /// Executes all operations sequentially.
+        /// Executes a image processing operation.
         /// </summary>
+        /// <param name="filePath">Path to the file image to process.</param>
+        /// <param name="background_bm">The background image.</param>
         private static void ExecuteSequentialOperation(string filePath, Bitmap background_bm)
         {
             Console.WriteLine($"Processing: {Path.GetFileName(filePath)}");
