@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Drawing;
 
 namespace PBA20_Parallel_Pipelines_with_load_balancing
 {
@@ -7,7 +8,21 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            Console.WriteLine("Executing all operations sequentially.");
+            MeasureTime(ExecuteSequentialOperation);
+            Console.WriteLine("Finished executing all operations sequentially.");
+        }
+
+        /// <summary>
+        /// Executes all operations sequentially.
+        /// </summary>
+        private static void ExecuteSequentialOperation()
+        {
+            Bitmap target_bm = ImageProcessor.LoadFileAsImage(new Uri("C:\\image.bmp"));
+            Bitmap background_bm = ImageProcessor.LoadFileAsImage(new Uri("C:\\backgroundFilter.bmp"));
+            target_bm = ImageProcessor.RemoveBackground(target_bm, background_bm);
+            target_bm = ImageProcessor.ResizeToThumbnail(target_bm);
+            ImageProcessor.SaveBitmapToFile(target_bm, new Uri("C:\\processed_image.bmp"));
         }
 
         /// <summary>
