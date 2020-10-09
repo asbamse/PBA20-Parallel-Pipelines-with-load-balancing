@@ -39,7 +39,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 AddTask();
 
                 //TODO START MULTIPLEXOR
-                Multiplexer();
+                Multiplexer(cts);
             }
         }
 
