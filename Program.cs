@@ -3,6 +3,7 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Threading;
 
 namespace PBA20_Parallel_Pipelines_with_load_balancing
 {
@@ -24,8 +25,9 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             Console.WriteLine("Executing Simple Pipeline");
             try
             {
-                MeasureTime(() => SimplePipeline.ExecuteSimplePipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory));
-                Console.WriteLine("Finsihed executing Simple Pipeline");
+                CancellationTokenSource cts = new CancellationTokenSource();
+                MeasureTime(() => SimplePipeline.ExecuteSimplePipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory, cts.Token));
+                Console.WriteLine("Finished executing Simple Pipeline");
             }
             catch (Exception ex)
             {
