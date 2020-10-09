@@ -34,11 +34,8 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             string path = $"{Directory.GetParent(AppContext.BaseDirectory).FullName}{Path.DirectorySeparatorChar}appsettings.json";
             JObject o1 = JObject.Parse(File.ReadAllText(path));
             InputDirectory = o1.Value<string>("InputDirectory");
-            Console.WriteLine("Input from: " + InputDirectory);
             OutputDirectory = o1.Value<string>("OutputDirectory");
-            Console.WriteLine("Output to: " + OutputDirectory);
             BackgroundFilePath = o1.Value<string>("BackgroundFilePath");
-            Console.WriteLine("Background bitmap from: " + BackgroundFilePath);
         }
 
         /// <summary>
@@ -52,7 +49,6 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 {
                     Bitmap background_bm = ImageProcessor.LoadFileAsImage(BackgroundFilePath);
                     ExecuteSequentialOperation(filePath, background_bm);
-                    Console.WriteLine(""); // Seperator
                 }
             }
         }
@@ -66,7 +62,6 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         /// <param name="background_bm">The background image.</param>
         private static void ExecuteSequentialOperation(string filePath, Bitmap background_bm)
         {
-            Console.WriteLine($"Processing: {Path.GetFileName(filePath)}");
             Bitmap target_bm = ImageProcessor.LoadFileAsImage(filePath);
 
             target_bm = ImageProcessor.RemoveBackground(target_bm, background_bm);
@@ -76,9 +71,6 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             string output_thumb = OutputDirectory + Path.DirectorySeparatorChar + Path.GetFileNameWithoutExtension(filePath) + "_thumbnail" + Path.GetExtension(filePath);
             ImageProcessor.SaveBitmapToFile(target_bm, output);
             ImageProcessor.SaveBitmapToFile(target_thumb_bm, output_thumb);
-
-            Console.WriteLine($"Finished processing: {filePath}");
-            Console.WriteLine($"Processed image saved to: {output}");
         }
 
         /// <summary>
