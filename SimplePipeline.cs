@@ -4,7 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Threading.Tasks;
 
-namespace PBA20_Parallel_Pipelines_with_load_balancing.input
+namespace PBA20_Parallel_Pipelines_with_load_balancing
 {
     public class SimplePipeline
     {
@@ -14,12 +14,12 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing.input
 
         static int BUFFER_SIZE = 10;
 
-        public static void ExecuteSimplePipelineOperation(string inputDirectory, string BackgroundFilePath, string outputdir, string filePath)
+        public static void ExecuteSimplePipelineOperation(string inputDirectory, string BackgroundFilePath, string outputdir)
         {
-            var buffer1 = new BlockingCollection<Bitmap>(BUFFER_SIZE);
-            var buffer2ForNormal = new BlockingCollection<Bitmap>(BUFFER_SIZE);
-            var buffer2ForThumbnail = new BlockingCollection<Bitmap>(BUFFER_SIZE);
-            var buffer3 = new BlockingCollection<Bitmap>(BUFFER_SIZE);
+            var buffer1 = new BlockingCollection<BitmapWithFilePath>(BUFFER_SIZE);
+            var buffer2ForNormal = new BlockingCollection<BitmapWithFilePath>(BUFFER_SIZE);
+            var buffer2ForThumbnail = new BlockingCollection<BitmapWithFilePath>(BUFFER_SIZE);
+            var buffer3 = new BlockingCollection<BitmapWithFilePath>(BUFFER_SIZE);
 
             Bitmap background_bm = ImageProcessor.LoadFileAsImage(BackgroundFilePath);
 
@@ -33,22 +33,33 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing.input
             var stage2 = f.StartNew(() => RemoveBackground(buffer1, background_bm, buffer2ForNormal, buffer2ForThumbnail));
 
             // THIRD TASKs
-            var stage3Normal = f.StartNew(() => SaveBitmap(buffer2ForNormal, outputdir, filePath));
+            var stage3Normal = f.StartNew(() => SaveBitmap(buffer2ForNormal, outputdir));
             var stage3Thumbnail = f.StartNew(() => CreateThumbnail(buffer2ForThumbnail, buffer3));
 
             // FOURTH TASK
-            var stage4 = f.StartNew(() => SaveThumbnailBitmap(buffer3, outputdir, filePath));
+            var stage4 = f.StartNew(() => SaveThumbnailBitmap(buffer3, outputdir));
+
+            Task.WaitAll(stage1, stage2, stage3Normal, stage3Thumbnail, stage4);
         }
 
 
-        private static void LoadImages(string InputDirectory, BlockingCollection<Bitmap> outputQueue)
+        private static void LoadImages(string InputDirectory, BlockingCollection<BitmapWithFilePath> outputQueue)
         {
             try
             {
                 foreach (string filePath in Directory.GetFiles(InputDirectory))
                 {
-                    Bitmap bm = ImageProcessor.LoadFileAsImage(filePath);
-                    outputQueue.Add(bm);
+                    if (Path.GetExtension(filePath) == ".bmp")
+                    {
+                        Bitmap bm = ImageProcessor.LoadFileAsImage(filePath);
+
+                        var outputObj = new BitmapWithFilePath()
+                        {
+                            FilePath = filePath,
+                            Image = bm
+                        };
+                        outputQueue.Add(outputObj);
+                    }
                 }
             }
             finally
@@ -57,16 +68,21 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing.input
             }
         }
 
-        private static void RemoveBackground(BlockingCollection<Bitmap> inputQueue, Bitmap background_bm, params BlockingCollection<Bitmap>[] outputQueues)
+        private static void RemoveBackground(BlockingCollection<BitmapWithFilePath> inputQueue, Bitmap background_bm, params BlockingCollection<BitmapWithFilePath>[] outputQueues)
         {
             try
             {
-                foreach (var target_bm in inputQueue.GetConsumingEnumerable())
+                foreach (var input in inputQueue.GetConsumingEnumerable())
                 {
-                    var result = ImageProcessor.RemoveBackground(target_bm, background_bm);
+                    var result = ImageProcessor.RemoveBackground(input.Image, background_bm);
                     foreach (var outputQueue in outputQueues)
                     {
-                        outputQueue.Add(result);
+                        var outputObj = new BitmapWithFilePath()
+                        {
+                            FilePath = input.FilePath,
+                            Image = result
+                        };
+                        outputQueue.Add(outputObj);
                     }
                 }
             }
@@ -79,14 +95,19 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing.input
             }
         }
 
-        private static void CreateThumbnail(BlockingCollection<Bitmap> inputQueue, BlockingCollection<Bitmap> outputQueue)
+        private static void CreateThumbnail(BlockingCollection<BitmapWithFilePath> inputQueue, BlockingCollection<BitmapWithFilePath> outputQueue)
         {
             try
             {
-                foreach (var target_bm in inputQueue.GetConsumingEnumerable())
+                foreach (var input in inputQueue.GetConsumingEnumerable())
                 {
-                    var result = ImageProcessor.ResizeToThumbnail(target_bm);
-                    outputQueue.Add(result);
+                    var result = ImageProcessor.ResizeToThumbnail(input.Image);
+                    var outputObj = new BitmapWithFilePath()
+                    {
+                        FilePath = input.FilePath,
+                        Image = result
+                    };
+                    outputQueue.Add(outputObj);
                 }
             }
             finally
@@ -95,23 +116,21 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing.input
             }
         }
 
-        private static void SaveThumbnailBitmap(BlockingCollection<Bitmap> inputQueue, string outputdir, string filePath)
+        private static void SaveThumbnailBitmap(BlockingCollection<BitmapWithFilePath> inputQueue, string outputdir)
         {
-            string output_thumb = outputdir + Path.DirectorySeparatorChar + Path.GetFileNameWithoutExtension(filePath) + "_thumbnail" + Path.GetExtension(filePath);
-
-            foreach (var target_thumb_bm in inputQueue.GetConsumingEnumerable())
+            foreach (var input in inputQueue.GetConsumingEnumerable())
             {
-                ImageProcessor.SaveBitmapToFile(target_thumb_bm, output_thumb);
+                string output_thumb = outputdir + Path.DirectorySeparatorChar + Path.GetFileNameWithoutExtension(input.FilePath) + "_thumbnail" + Path.GetExtension(input.FilePath);
+                ImageProcessor.SaveBitmapToFile(input.Image, output_thumb);
             }
         }
 
-        private static void SaveBitmap(BlockingCollection<Bitmap> inputQueue, string outputdir, string filePath)
+        private static void SaveBitmap(BlockingCollection<BitmapWithFilePath> inputQueue, string outputdir)
         {
-            string output = outputdir + Path.DirectorySeparatorChar + Path.GetFileName(filePath);
-
-            foreach (var target_bm in inputQueue.GetConsumingEnumerable())
+            foreach (var input in inputQueue.GetConsumingEnumerable())
             {
-                ImageProcessor.SaveBitmapToFile(target_bm, output);
+                string output = outputdir + Path.DirectorySeparatorChar + Path.GetFileName(input.FilePath);
+                ImageProcessor.SaveBitmapToFile(input.Image, output);
             }
         }
     }
