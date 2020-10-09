@@ -12,6 +12,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
     public class SimplePipelineLoadBalenced
     {
         static int BUFFER_SIZE = 10;
+        static int MULTIPLEXOR_TIMEOUT = -1; // -1 is infinite
 
         public static void ExecuteSimpleLoadBalencedPipelineOperation(string inputDirectory, string BackgroundFilePath, string outputdir, CancellationToken token)
         {
@@ -37,8 +38,8 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 var stage1 = f.StartNew(() => LoadImages(inputDirectory, buffer1, cts));
 
                 // SECOND TASK
-                var stage2Task1 = f.StartNew(() => RemoveBackground(buffer1, background_bm, cts, buffer2ForNormalTask1, buffer2ForThumbnailTask1));
-                var stage2Task2 = f.StartNew(() => RemoveBackground(buffer1, background_bm, cts, buffer2ForNormalTask2, buffer2ForThumbnailTask2));
+                var stage2Task1 = f.StartNew(() => RemoveBackground(buffer1, (Bitmap)background_bm.Clone(), cts, buffer2ForNormalTask1, buffer2ForThumbnailTask1));
+                var stage2Task2 = f.StartNew(() => RemoveBackground(buffer1, (Bitmap)background_bm.Clone(), cts, buffer2ForNormalTask2, buffer2ForThumbnailTask2));
 
                 //MULTIPLEXER
                 var multiplexerNormal = f.StartNew(() => Multiplexer(buffer3ForNormal, cts, buffer2ForNormalTask1, buffer2ForNormalTask2));
@@ -84,7 +85,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         break;
                     }
 
-                    BlockingCollection<BitmapWithFilePathAndSeq>.TakeFromAny(inputQueues, out var item, token);
+                    BlockingCollection<BitmapWithFilePathAndSeq>.TryTakeFromAny(inputQueues, out var item, MULTIPLEXOR_TIMEOUT, token);
                     if (item != null)
                     {
                         if (item.SeqId == nextIndex)
@@ -104,7 +105,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
 
                                 if (nextFound != null)
                                 {
-                                    foundItems.Remove(nextFound);
+                                    //foundItems.Remove(nextFound);
                                     outputQueue.Add(nextFound, token);
                                 }
                             } while (nextFound != null);
