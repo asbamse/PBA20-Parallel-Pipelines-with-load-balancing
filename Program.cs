@@ -3,6 +3,7 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Threading;
 
 namespace PBA20_Parallel_Pipelines_with_load_balancing
 {
@@ -22,12 +23,33 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             Console.WriteLine("Finished executing all operations sequentially.");
 
             Console.WriteLine("Executing Simple Pipeline");
-            MeasureTime(() => SimplePipeline.ExecuteSimplePipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory));
-            Console.WriteLine("Finsihed executing Simple Pipeline");
+
+            try
+            {
+                CancellationTokenSource cts = new CancellationTokenSource();
+                MeasureTime(() => SimplePipeline.ExecuteSimplePipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory, cts.Token));
+                Console.WriteLine("Finished executing Simple Pipeline");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine();
+                Console.WriteLine(ex.GetType());
+                Console.WriteLine($"    {ex.Message}");
+            }
 
             Console.WriteLine("Executing Simple Load Balanced Pipeline");
-            MeasureTime(() => SimplePipelineLoadBalenced.ExecuteSimpleLoadBalencedPipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory));
-            Console.WriteLine("Finsihed executing Simple Load Balanced Pipeline");
+            try
+            {
+                CancellationTokenSource cts = new CancellationTokenSource();
+                MeasureTime(() => SimplePipelineLoadBalenced.ExecuteSimpleLoadBalencedPipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory));
+                Console.WriteLine("Finsihed executing Simple Load Balanced Pipeline");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine();
+                Console.WriteLine(ex.GetType());
+                Console.WriteLine($"    {ex.Message}");
+            }
         }
 
         /// <summary>
