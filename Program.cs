@@ -22,8 +22,17 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             Console.WriteLine("Finished executing all operations sequentially.");
 
             Console.WriteLine("Executing Simple Pipeline");
-            MeasureTime(() => SimplePipeline.ExecuteSimplePipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory));
-            Console.WriteLine("Finsihed executing Simple Pipeline");
+            try
+            {
+                MeasureTime(() => SimplePipeline.ExecuteSimplePipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory));
+                Console.WriteLine("Finsihed executing Simple Pipeline");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine();
+                Console.WriteLine(ex.GetType());
+                Console.WriteLine($"    {ex.Message}");
+            }
         }
 
         /// <summary>

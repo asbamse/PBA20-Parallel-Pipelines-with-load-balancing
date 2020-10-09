@@ -39,7 +39,20 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             // FOURTH TASK
             var stage4 = f.StartNew(() => SaveThumbnailBitmap(buffer3, outputdir));
 
-            Task.WaitAll(stage1, stage2, stage3Normal, stage3Thumbnail, stage4);
+            try
+            {
+                Task.WaitAll(stage1, stage2, stage3Normal, stage3Thumbnail, stage4);
+            }
+            catch (Exception ex)
+            {
+                if (ex is AggregateException ae) // Unwrap aggregate exception.
+                {
+                    ae.Handle((ie) =>
+                    {
+                        throw ie;
+                    });
+                }
+            }
         }
 
 
