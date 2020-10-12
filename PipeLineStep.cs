@@ -14,33 +14,48 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
     /// <typeparam name="U">The output Blocking collections objects type</typeparam>
     public class PipeLineStep<T, U> : IPipelineStep where U : ISequenceIdentifiable
     {
+        class SuspensableTaskObj
+        {
+            public Task Task { get; set; }
+            public CancellationTokenSource SuspensionToken { get; set; }
+        }
+
         static int BUFFER_SIZE = 10;
         static int MULTIPLEXOR_TIMEOUT = -1; // -1 is infinite
 
         // Task Queues holds the output queues of each task
         private readonly List<BlockingCollection<U>> taskQueues = new List<BlockingCollection<U>>();
-        private readonly List<Task> tasks = new List<Task>();
-        private readonly List<bool> shouldCloseStates = new List<bool>();
+        private readonly List<SuspensableTaskObj> tasks = new List<SuspensableTaskObj>();
 
         private readonly BlockingCollection<T> inputQueue;
         private readonly BlockingCollection<U> outputQueue;
-        private readonly Action<BlockingCollection<T>, BlockingCollection<U>> action;
+        private readonly Action<BlockingCollection<T>, BlockingCollection<U>, CancellationToken, CancellationTokenSource> action;
 
         private readonly TaskFactory taskFactory = new TaskFactory(TaskCreationOptions.LongRunning, TaskContinuationOptions.None);
 
-        public PipeLineStep(BlockingCollection<T> inputQueue, BlockingCollection<U> outputQueue, Action<BlockingCollection<T>, BlockingCollection<U>> action, CancellationToken token)
+        private readonly CancellationTokenSource cts;
+
+        /// <summary>
+        /// A Loadbalanced Pipeline step, the step can not be dependent on other task before it since earlier tasks might not have finished yet.
+        /// </summary>
+        /// <param name="inputQueue">Queue for items to process</param>
+        /// <param name="outputQueue">Queue for processed items</param>
+        /// <param name="action">The Action to process an item takes inputQueue, outputQueue, taskSuspensionToken (used for suspending task when fewer tasks are needed), CancellationTokenSource (Cancellation of complete Pipeline step, shared among tasks)</param>
+        /// <param name="token">Cancellation Token</param>
+        public PipeLineStep(BlockingCollection<T> inputQueue, BlockingCollection<U> outputQueue, Action<BlockingCollection<T>, BlockingCollection<U>, CancellationToken, CancellationTokenSource> action, CancellationToken token)
         {
             this.inputQueue = inputQueue;
             this.outputQueue = outputQueue;
             this.action = action;
-            using (CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(token))
-            {
-                //Add initial task 
-                AddTask();
 
-                //TODO START MULTIPLEXOR
-                Multiplexer(cts);
-            }
+            cts = CancellationTokenSource.CreateLinkedTokenSource(token);
+
+            //Add initial task 
+            AddTask();
+
+            //Start Multiplexor
+            Multiplexer(cts);
+
         }
 
 
@@ -53,7 +68,17 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 // TODO MAYBE Add an id to keep count of who is who
                 taskQueues.Add(taskOutputQueue);
 
-                taskFactory.StartNew(() => action(inputQueue, taskOutputQueue));
+                CancellationTokenSource suspensionTokenSource = new CancellationTokenSource();
+                CancellationToken suspensionToken = suspensionTokenSource.Token;
+
+                var task = taskFactory.StartNew(() => action(inputQueue, taskOutputQueue, suspensionToken, cts));
+
+                tasks.Add(new SuspensableTaskObj
+                {
+                    Task = task,
+                    SuspensionToken = suspensionTokenSource,
+                });
+
                 return true;
             }
             catch (Exception)
@@ -75,7 +100,18 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
 
         public bool RemoveTask()
         {
-            throw new NotImplementedException();
+            if (tasks.Count > 1)
+            {
+                var toSuspend = tasks.Last();
+                tasks.Remove(toSuspend);
+                toSuspend.SuspensionToken.Cancel();
+
+                // TODO Could have exception
+                // TODO Could not check suspension token maybe a timeout
+                toSuspend.Task.Wait();
+                return true;
+            }
+            return false;
         }
 
         private void Multiplexer(CancellationTokenSource cts)
