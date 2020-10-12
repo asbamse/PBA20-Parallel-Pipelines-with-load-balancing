@@ -28,34 +28,45 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         private readonly List<SuspensableTaskObj> tasks = new List<SuspensableTaskObj>();
 
         private readonly BlockingCollection<T> inputQueue;
-        private readonly BlockingCollection<U> outputQueue;
+        private readonly BlockingCollection<U>[] outputQueues;
         private readonly Action<BlockingCollection<T>, BlockingCollection<U>, CancellationToken, CancellationTokenSource> action;
 
         private readonly TaskFactory taskFactory = new TaskFactory(TaskCreationOptions.LongRunning, TaskContinuationOptions.None);
 
         private readonly CancellationTokenSource cts;
 
+
+        // TODO Add posibility for no output queue, when there is no output queue the multiplexor is not needed
+        // TODO Make someway to wait for the tasks
         /// <summary>
         /// A Loadbalanced Pipeline step, the step can not be dependent on other task before it since earlier tasks might not have finished yet.
         /// </summary>
         /// <param name="inputQueue">Queue for items to process</param>
-        /// <param name="outputQueue">Queue for processed items</param>
-        /// <param name="action">The Action to process an item takes inputQueue, outputQueue, taskSuspensionToken (used for suspending task when fewer tasks are needed), CancellationTokenSource (Cancellation of complete Pipeline step, shared among tasks)</param>
-        /// <param name="token">Cancellation Token</param>
-        public PipeLineStep(BlockingCollection<T> inputQueue, BlockingCollection<U> outputQueue, Action<BlockingCollection<T>, BlockingCollection<U>, CancellationToken, CancellationTokenSource> action, CancellationToken token)
+        /// <param name="action">The Action to process an item takes inputQueue, outputQueue, taskSuspensionToken (used for suspending task when fewer tasks are needed, remeber to call completeAdding when this is received), CancellationTokenSource (Cancellation of complete Pipeline step, shared among tasks)</param>
+        /// <param name="cts">Cancellation Token Source</param>
+        /// <param name="outputQueues">Queue(s) for processed items</param>
+        public PipeLineStep(BlockingCollection<T> inputQueue, Action<BlockingCollection<T>, BlockingCollection<U>, CancellationToken, CancellationTokenSource> action, CancellationTokenSource cts, params BlockingCollection<U>[] outputQueues)
         {
             this.inputQueue = inputQueue;
-            this.outputQueue = outputQueue;
+            this.outputQueues = outputQueues;
             this.action = action;
+            this.cts = cts;
+        }
 
-            cts = CancellationTokenSource.CreateLinkedTokenSource(token);
-
+        public void Start()
+        {
             //Add initial task 
             AddTask();
 
             //Start Multiplexor
             Multiplexer(cts);
+        }
 
+        public static PipeLineStep<T, U> StartNew(BlockingCollection<T> inputQueue, Action<BlockingCollection<T>, BlockingCollection<U>, CancellationToken, CancellationTokenSource> action, CancellationTokenSource cts, params BlockingCollection<U>[] outputQueues)
+        {
+            var instance = new PipeLineStep<T, U>(inputQueue, action, cts, outputQueues);
+            instance.Start();
+            return instance;
         }
 
 
@@ -65,7 +76,6 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             try
             {
                 var taskOutputQueue = new BlockingCollection<U>(BUFFER_SIZE);
-                // TODO MAYBE Add an id to keep count of who is who
                 taskQueues.Add(taskOutputQueue);
 
                 CancellationTokenSource suspensionTokenSource = new CancellationTokenSource();
@@ -90,7 +100,8 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         // DISCUSS is read from the outputQueue which is given via the constructer so might not be the resposebility of this class
         public int QueueFillLevel()
         {
-            return outputQueue.Count;
+            // SHOULD NOT BE USED I THINK
+            return outputQueues[0].Count;
         }
 
         public int TaskAmount()
@@ -106,9 +117,10 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 tasks.Remove(toSuspend);
                 toSuspend.SuspensionToken.Cancel();
 
-                // TODO Could have exception
+                // TODO Could have an exception
                 // TODO Could not check suspension token maybe a timeout
                 toSuspend.Task.Wait();
+                // TODO only return if cancellation was proper (that it has run to finish, to ensure a valid state and that no item is lost)
                 return true;
             }
             return false;
@@ -129,12 +141,13 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         break;
                     }
                     // TODO Check if the ToArray() gives problems
+                    // TODO TryTake from any might not be the best if it is not waiting for an item
                     BlockingCollection<U>.TryTakeFromAny(taskQueues.ToArray(), out var item, MULTIPLEXOR_TIMEOUT, token);
                     if (item != null)
                     {
                         if (item.SeqId == nextIndex)
                         {
-                            outputQueue.Add(item, token);
+                            AddToOutpuQueues(item, token);
 
                             U nextFound = default(U);
                             do
@@ -147,12 +160,12 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                                 nextIndex++;
                                 nextFound = foundItems.Find(i => i.SeqId == nextIndex);
 
-                                if (nextFound.Equals(default(U)))
+                                if (!EqualityComparer<U>.Default.Equals(nextFound, default(U)))
                                 {
-                                    //foundItems.Remove(nextFound);
-                                    outputQueue.Add(nextFound, token);
+                                    foundItems.Remove(nextFound);
+                                    AddToOutpuQueues(nextFound, token);
                                 }
-                            } while (nextFound.Equals(default(U)));
+                            } while (!EqualityComparer<U>.Default.Equals(nextFound, default(U)));
                         }
                         else
                         {
@@ -160,6 +173,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         }
                     }
                 }
+
             }
             catch (Exception ex)
             {
@@ -171,7 +185,18 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             }
             finally
             {
-                outputQueue.CompleteAdding();
+                foreach (var queue in outputQueues)
+                {
+                    queue.CompleteAdding();
+                }
+            }
+        }
+
+        private void AddToOutpuQueues(U item, CancellationToken token)
+        {
+            foreach (var queue in outputQueues)
+            {
+                queue.Add(item, token);
             }
         }
     }
