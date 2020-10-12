@@ -35,9 +35,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
 
         private readonly CancellationTokenSource cts;
 
-
-        // TODO Add posibility for no output queue, when there is no output queue the multiplexor is not needed
-        // TODO Make someway to wait for the tasks
+        // TODO Make someway to wait for the tasks, could maybe be the multiplexing task one waits for. 
         /// <summary>
         /// A Loadbalanced Pipeline step, the step can not be dependent on other task before it since earlier tasks might not have finished yet.
         /// </summary>
@@ -59,7 +57,11 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             AddTask();
 
             //Start Multiplexor
-            Multiplexer(cts);
+            if (outputQueues.Count() > 0)
+            {
+                //Only start Multiplexer is there is an output queue
+                taskFactory.StartNew(() => Multiplexer(cts));
+            }
         }
 
         public static PipeLineStep<T, U> StartNew(BlockingCollection<T> inputQueue, Action<BlockingCollection<T>, BlockingCollection<U>, CancellationToken, CancellationTokenSource> action, CancellationTokenSource cts, params BlockingCollection<U>[] outputQueues)
@@ -68,7 +70,6 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             instance.Start();
             return instance;
         }
-
 
         // DISCUSS Might not be relevant to return boolean since there is no max and an exception might be more useful
         public bool AddTask()
@@ -97,16 +98,16 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             }
         }
 
+        public int TaskAmount()
+        {
+            return tasks.Count;
+        }
+
         // DISCUSS is read from the outputQueue which is given via the constructer so might not be the resposebility of this class
         public int QueueFillLevel()
         {
             // SHOULD NOT BE USED I THINK
             return outputQueues[0].Count;
-        }
-
-        public int TaskAmount()
-        {
-            return tasks.Count;
         }
 
         public bool RemoveTask()
