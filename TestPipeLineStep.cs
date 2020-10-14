@@ -129,14 +129,24 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         /// <param name="pipelineSteps">The pipeline steps which should be distributed tasks.</param>
         private static void DistributeAvailableTasksAndAwaitPipelineCompletion(List<Task> nonParallelTasks, List<TaskPipelineStep<BitmapWithFilePathAndSeq>> pipelineSteps)
         {
+            if (nonParallelTasks is null)
+            {
+                throw new ArgumentNullException(nameof(nonParallelTasks));
+            }
+
+            if (pipelineSteps is null)
+            {
+                throw new ArgumentNullException(nameof(pipelineSteps));
+            }
+
             // Calculates max amount of tasks to prevent processor oversubscription.
-            int max_task_count = (int)Math.Log(Environment.ProcessorCount, 2) + 4;
+            int max_task_count = (int)Math.Max(Environment.ProcessorCount * 4, pipelineSteps.Count * 2);
 
             // While tasks are not completed.
-            while ((nonParallelTasks.Count > 0 && nonParallelTasks.All(x => !x.IsCompleted)) || (!(pipelineSteps is null) && !pipelineSteps.Where(x => x.Tasks.Count > 0).SelectMany(x => x.Tasks).All(x => x.IsCompleted)))
+            while ((nonParallelTasks.Count > 0 && nonParallelTasks.All(x => !x.IsCompleted)) || (!pipelineSteps.Where(x => x.Tasks.Count > 0).SelectMany(x => x.Tasks).All(x => x.IsCompleted)))
             {
                 // only manage steps is available.
-                if (!(pipelineSteps is null) && pipelineSteps.Count > 0)
+                if (pipelineSteps.Count > 0)
                 {
                     // Calculate tasks not in use.
                     int tasksAvailable = max_task_count - pipelineSteps.Sum(x => x.Queue.IsCompleted ? 0 : x.PipelineStep.TaskAmount());
