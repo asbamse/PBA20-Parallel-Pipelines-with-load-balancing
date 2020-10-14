@@ -28,7 +28,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 var stage1 = f.StartNew(() => LoadImages(inputDirectory, buffer1, cts));
 
                 // SECOND TASK
-                var stage2 = f.StartNew(() => RemoveBackground(buffer1, background_bm, new []{ buffer2ForNormal, buffer2ForThumbnail }, cts));
+                var stage2 = f.StartNew(() => RemoveBackground(buffer1, (Bitmap)background_bm.Clone(), new []{ buffer2ForNormal, buffer2ForThumbnail }, cts));
 
                 // THIRD TASKs
                 var stage3Normal = f.StartNew(() => SaveBitmap(buffer2ForNormal, outputdir, cts));

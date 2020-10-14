@@ -194,9 +194,12 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                             break;
                         }
 
-                        var outputObj = input;
-                        outputObj.Image = i == 0 ? result : (Bitmap)result.Clone();
-                        outputQueues[i].Add(outputObj, token);
+                        outputQueues[i].Add(new BitmapWithFilePathAndSeq()
+                        {
+                            FilePath = input.FilePath,
+                            Image = (Bitmap)result.Clone(),
+                            SeqId = input.SeqId,
+                        }, token);
                     }
                 }
             }
@@ -230,9 +233,12 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                     }
                     var result = ImageProcessor.ResizeToThumbnail(input.Image);
 
-                    var outputObj = input;
-                    outputObj.Image = result;
-                    outputQueue.Add(outputObj, token);
+                    outputQueue.Add(new BitmapWithFilePathAndSeq()
+                    {
+                        FilePath = input.FilePath,
+                        Image = (Bitmap)result.Clone(),
+                        SeqId = input.SeqId,
+                    }, token);
                 }
             }
             catch (Exception ex)

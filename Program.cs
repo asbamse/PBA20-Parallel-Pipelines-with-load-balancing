@@ -57,7 +57,6 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 CancellationTokenSource cts = new CancellationTokenSource();
                 MeasureTime(() => TestPipeLineStep.ExecuteTestPipelineStepOperation(InputDirectory, BackgroundFilePath, OutputDirectory, cts.Token));
                 Console.WriteLine("Finsihed executing Test pipeline step");
-
             }
             catch (Exception ex)
             {

@@ -11,7 +11,16 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
 {
     public class TestPipeLineStep
     {
-        static int BUFFER_SIZE = 10;
+        private class TaskPipelineStep<T>
+        {
+            public string Name { get; set; }
+            public List<Task> Tasks { get; set; }
+            public IPipelineStep PipelineStep { get; set; }
+            public BlockingCollection<T> Queue { get; set; }
+        }
+
+        static readonly int BUFFER_SIZE = 10;
+        static readonly int TASK_DISTRIBUTION_SLEEP = 100;
 
         public static void ExecuteTestPipelineStepOperation(string inputDirectory, string BackgroundFilePath, string outputdir, CancellationToken token)
         {
@@ -32,9 +41,10 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             using (CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(token))
             {
                 var f = new TaskFactory(TaskCreationOptions.LongRunning, TaskContinuationOptions.None);
+                List<TaskPipelineStep<BitmapWithFilePathAndSeq>> pipelineSteps = new List<TaskPipelineStep<BitmapWithFilePathAndSeq>>();
 
                 // FIRST TASK
-                new PipeLineStep<BitmapWithFilePathAndSeq, BitmapWithFilePathAndSeq>(
+                var pipelineStep1Task = new PipeLineStep<BitmapWithFilePathAndSeq, BitmapWithFilePathAndSeq>(
                     null,
                     (
                         BlockingCollection<BitmapWithFilePathAndSeq> inputQ,
@@ -47,7 +57,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 ).Start();
 
                 // SECOND TASK
-                var pipelineStep1 = new PipeLineStep<BitmapWithFilePathAndSeq, BitmapWithFilePathAndSeq>(
+                var pipelineStep2 = new PipeLineStep<BitmapWithFilePathAndSeq, BitmapWithFilePathAndSeq>(
                     buffer1,
                     (
                         BlockingCollection<BitmapWithFilePathAndSeq> inputQ,
@@ -59,13 +69,18 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                     buffer3ForThumbnail,
                     buffer3ForNormal
                 );
-                pipelineStep1.Start();
-                pipelineStep1.AddTask();
+                Task pipelineStep2Task = pipelineStep2.Start();
+                pipelineSteps.Add(new TaskPipelineStep<BitmapWithFilePathAndSeq>()
+                {
+                    Name = "Step 2",
+                    PipelineStep = pipelineStep2,
+                    Tasks = new List<Task>() { pipelineStep2Task, pipelineStep2.MultiplexorTask },
+                    Queue = buffer1,
+                });
 
                 // THIRD TASKs
-
-                new PipeLineStep<BitmapWithFilePathAndSeq, BitmapWithFilePathAndSeq>(
-                    buffer3ForNormal,
+                var pipelineStep3 = new PipeLineStep<BitmapWithFilePathAndSeq, BitmapWithFilePathAndSeq>(
+                    buffer3ForThumbnail,
                     (
                         BlockingCollection<BitmapWithFilePathAndSeq> inputQ,
                         BlockingCollection<BitmapWithFilePathAndSeq> outputQ,
@@ -74,7 +89,15 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                     ) => CreateThumbnail(inputQ, outputQ, cancel),
                     cts,
                     buffer4
-                ).Start();
+                );
+                Task pipelineStep3Task = pipelineStep3.Start();
+                pipelineSteps.Add(new TaskPipelineStep<BitmapWithFilePathAndSeq>()
+                {
+                    Name = "Step 3",
+                    PipelineStep = pipelineStep3,
+                    Tasks = new List<Task>() { pipelineStep3Task, pipelineStep3.MultiplexorTask },
+                    Queue = buffer3ForThumbnail,
+                });
 
                 var stage3Normal = f.StartNew(() => SaveBitmap(buffer3ForNormal, outputdir, cts));
 
@@ -83,7 +106,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
 
                 try
                 {
-                    Task.WaitAll(stage4);
+                    DistributeAvailableTasksAndAwaitPipelineCompletion(new List<Task>() { pipelineStep1Task, stage3Normal, stage4 }, pipelineSteps);
                 }
                 catch (Exception ex)
                 {
@@ -99,6 +122,66 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             }
         }
 
+        /// <summary>
+        /// Distributes available tasks to pipeline steps. Awaits tasks to complete.
+        /// </summary>
+        /// <param name="nonParallelTasks">Tasks which should be awaited.</param>
+        /// <param name="pipelineSteps">The pipeline steps which should be distributed tasks.</param>
+        private static void DistributeAvailableTasksAndAwaitPipelineCompletion(List<Task> nonParallelTasks, List<TaskPipelineStep<BitmapWithFilePathAndSeq>> pipelineSteps)
+        {
+            // Calculates max amount of tasks to prevent processor oversubscription.
+            int max_task_count = (int)Math.Log(Environment.ProcessorCount, 2) + 4;
+
+            // While tasks are not completed.
+            while ((nonParallelTasks.Count > 0 && nonParallelTasks.All(x => !x.IsCompleted)) || (!(pipelineSteps is null) && !pipelineSteps.Where(x => x.Tasks.Count > 0).SelectMany(x => x.Tasks).All(x => x.IsCompleted)))
+            {
+                // only manage steps is available.
+                if (!(pipelineSteps is null) && pipelineSteps.Count > 0)
+                {
+                    // Calculate tasks not in use.
+                    int tasksAvailable = max_task_count - pipelineSteps.Sum(x => x.Queue.IsCompleted ? 0 : x.PipelineStep.TaskAmount());
+
+                    // If no available tasks.
+                    if (tasksAvailable == 0 && pipelineSteps.Count(x => !x.Queue.IsCompleted) > 1)
+                    {
+                        // Find step which is the least in need of tasks.
+                        var stepToAffect = pipelineSteps
+                            .Where(x => !x.Queue.IsCompleted && x.PipelineStep.TaskAmount() > 1)
+                            .OrderBy(x => x.Queue.Count / x.PipelineStep.TaskAmount())
+                            .FirstOrDefault();
+                        // Remove task from step.
+                        if (!(stepToAffect is null))
+                        {
+                            stepToAffect.PipelineStep.RemoveTask();
+                            Console.WriteLine($"Removed task from {stepToAffect.Name} which has {stepToAffect.PipelineStep.TaskAmount()} tasks");
+                            tasksAvailable = max_task_count - pipelineSteps.Sum(x => x.Queue.IsCompleted ? 0 : x.PipelineStep.TaskAmount());
+                        }
+                    }
+
+                    // If task is available.
+                    if (tasksAvailable > 0)
+                    {
+                        // Get the step in most need of a task.
+                        var stepToAffect = pipelineSteps
+                            .Where(x => !x.Queue.IsCompleted && x.PipelineStep.TaskAmount() > 0)
+                            .OrderByDescending(x => x.Queue.Count / x.PipelineStep.TaskAmount())
+                            .FirstOrDefault();
+                        // Add task.
+                        if (!(stepToAffect is null))
+                        {
+                            stepToAffect.Tasks.Add(stepToAffect.PipelineStep.AddTask());
+                            Console.WriteLine($"Added task to {stepToAffect.Name} which has {stepToAffect.PipelineStep.TaskAmount()} tasks");
+                        }
+                    }
+
+                    // Sleep if all tasks are distributed.
+                    if (tasksAvailable == 0)
+                    {
+                        Thread.Sleep(TASK_DISTRIBUTION_SLEEP);
+                    }
+                }
+            }
+        }
 
         private static void LoadImages(string InputDirectory, BlockingCollection<BitmapWithFilePathAndSeq> outputQueue, CancellationTokenSource cts)
         {
@@ -162,9 +245,12 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                             break;
                         }
 
-                        var outputObj = input;
-                        outputObj.Image = i == 0 ? result : (Bitmap)result.Clone();
-                        outputQueues[i].Add(outputObj, token);
+                        outputQueues[i].Add(new BitmapWithFilePathAndSeq()
+                        {
+                            FilePath = input.FilePath,
+                            Image = (Bitmap)result.Clone(),
+                            SeqId = input.SeqId,
+                        }, token);
                     }
 
                     if (suspensionToken.IsCancellationRequested)
@@ -203,9 +289,12 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                     }
                     var result = ImageProcessor.ResizeToThumbnail(input.Image);
 
-                    var outputObj = input;
-                    outputObj.Image = result;
-                    outputQueue.Add(outputObj, token);
+                    outputQueue.Add(new BitmapWithFilePathAndSeq()
+                    {
+                        FilePath = input.FilePath,
+                        Image = (Bitmap)result.Clone(),
+                        SeqId = input.SeqId,
+                    }, token);
                 }
             }
             catch (Exception ex)

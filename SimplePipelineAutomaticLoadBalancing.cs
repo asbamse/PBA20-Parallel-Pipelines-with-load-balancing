@@ -16,10 +16,6 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         {
             int max_task_count = (int)Math.Log(Environment.ProcessorCount, 2) + 4;
 
-            // Task to handle task balancing
-            // - While loop
-            // - 
-
             var buffer1 = new BlockingCollection<SeqObject<int>>(BUFFER_SIZE);
 
             var bufferForTimesTwo = new BlockingCollection<SeqObject<int>>(BUFFER_SIZE);
