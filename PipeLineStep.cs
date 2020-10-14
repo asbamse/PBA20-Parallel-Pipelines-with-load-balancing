@@ -35,6 +35,8 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
 
         private readonly CancellationTokenSource cts;
 
+        public bool Finished { get; private set; }
+
         // TODO Make someway to wait for the tasks, could maybe be the multiplexing task one waits for. 
         /// <summary>
         /// A Loadbalanced Pipeline step, the step can not be dependent on other task before it since earlier tasks might not have finished yet.
@@ -190,6 +192,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 {
                     queue.CompleteAdding();
                 }
+                Finished = true;
             }
         }
 
