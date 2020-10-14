@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Threading;
+using System.Security.Cryptography.X509Certificates;
 
 namespace PBA20_Parallel_Pipelines_with_load_balancing
 {
@@ -190,6 +191,15 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         Thread.Sleep(TASK_DISTRIBUTION_SLEEP);
                     }
                 }
+            }
+            
+            if (nonParallelTasks.Any(x => !(x.Exception is null)))
+            {
+                throw nonParallelTasks.FirstOrDefault(x => !(x.Exception is null)).Exception;
+            }
+            if (pipelineSteps.Where(x => x.Tasks.Count > 0).SelectMany(x => x.Tasks).Any(x => !(x.Exception is null)))
+            {
+                throw pipelineSteps.Where(x => x.Tasks.Count > 0).SelectMany(x => x.Tasks).FirstOrDefault(x => !(x.Exception is null)).Exception;
             }
         }
 
