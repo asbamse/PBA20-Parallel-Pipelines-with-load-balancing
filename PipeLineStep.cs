@@ -37,6 +37,13 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
 
         public bool Finished { get; private set; }
 
+        public Exception[] Exceptions { get; set; }
+
+        /// <summary>
+        /// If there is at least one outputQueue this will be set to the multiplexor intance task.
+        /// </summary>
+        public Task MultiplexorTask { get; private set; }
+
         // TODO Make someway to wait for the tasks, could maybe be the multiplexing task one waits for. 
         /// <summary>
         /// A Loadbalanced Pipeline step, the step can not be dependent on other task before it since earlier tasks might not have finished yet.
@@ -53,30 +60,25 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             this.cts = cts;
         }
 
-        public void Start()
+        public Task Start()
         {
             //Add initial task 
-            AddTask();
+            var task = AddTask();
 
             //Start Multiplexor
             if (outputQueues.Count() > 0)
             {
                 //Only start Multiplexer is there is an output queue
-                taskFactory.StartNew(() => Multiplexer(cts));
+                var multiplexor = taskFactory.StartNew(() => Multiplexer(cts));
+                MultiplexorTask = multiplexor;
             }
+
+            return task;
         }
 
-        public static PipeLineStep<T, U> StartNew(BlockingCollection<T> inputQueue, Action<BlockingCollection<T>, BlockingCollection<U>, CancellationToken, CancellationTokenSource> action, CancellationTokenSource cts, params BlockingCollection<U>[] outputQueues)
+        public Task AddTask()
         {
-            var instance = new PipeLineStep<T, U>(inputQueue, action, cts, outputQueues);
-            instance.Start();
-            return instance;
-        }
-
-        // DISCUSS Might not be relevant to return boolean since there is no max and an exception might be more useful
-        public bool AddTask()
-        {
-            try
+            if (!Finished)
             {
                 var taskOutputQueue = new BlockingCollection<U>(BUFFER_SIZE);
                 taskQueues.Add(taskOutputQueue);
@@ -92,12 +94,9 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                     SuspensionToken = suspensionTokenSource,
                 });
 
-                return true;
+                return task;
             }
-            catch (Exception)
-            {
-                return false;
-            }
+            return null;
         }
 
         public int TaskAmount()
@@ -105,24 +104,22 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             return tasks.Count;
         }
 
-        // DISCUSS is read from the outputQueue which is given via the constructer so might not be the resposebility of this class
-        public int QueueFillLevel()
-        {
-            // SHOULD NOT BE USED I THINK
-            return outputQueues[0].Count;
-        }
-
+        /// <summary>
+        /// Removes a task from the step, since the task should have at least one task it will return false and not delete the last task if the step has not yet finished.
+        /// Can trow an exception if the task had an exception inside.
+        /// </summary>
+        /// <returns>True if removed a task, false if there are to few tasks to remove any more</returns>
         public bool RemoveTask()
         {
-            if (tasks.Count > 1)
+            if (tasks.Count > 1 || Finished)
             {
                 var toSuspend = tasks.Last();
                 tasks.Remove(toSuspend);
                 toSuspend.SuspensionToken.Cancel();
 
-                // TODO Could have an exception
                 // TODO Could not check suspension token maybe a timeout
-                toSuspend.Task.Wait();
+
+                toSuspend.Task.Wait(cts.Token);
                 // TODO only return if cancellation was proper (that it has run to finish, to ensure a valid state and that no item is lost)
                 return true;
             }

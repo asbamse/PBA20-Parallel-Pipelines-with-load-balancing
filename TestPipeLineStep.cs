@@ -34,17 +34,17 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 var f = new TaskFactory(TaskCreationOptions.LongRunning, TaskContinuationOptions.None);
 
                 // FIRST TASK
-                PipeLineStep<BitmapWithFilePathAndSeq, BitmapWithFilePathAndSeq>.StartNew(
+                new PipeLineStep<BitmapWithFilePathAndSeq, BitmapWithFilePathAndSeq>(
                     null,
                     (
                         BlockingCollection<BitmapWithFilePathAndSeq> inputQ,
                         BlockingCollection<BitmapWithFilePathAndSeq> outputQ,
                         CancellationToken suspend,
                         CancellationTokenSource cancel
-                    ) => LoadImages(inputDirectory, outputQ, cts),
+                    ) => LoadImages(inputDirectory, outputQ, cancel),
                     cts,
                     buffer1
-                );
+                ).Start();
 
                 // SECOND TASK
                 var pipelineStep1 = new PipeLineStep<BitmapWithFilePathAndSeq, BitmapWithFilePathAndSeq>(
@@ -54,7 +54,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         BlockingCollection<BitmapWithFilePathAndSeq> outputQ,
                         CancellationToken suspend,
                         CancellationTokenSource cancel
-                    ) => RemoveBackground(inputQ, (Bitmap)background_bm.Clone(), cts, outputQ),
+                    ) => RemoveBackground(inputQ, (Bitmap)background_bm.Clone(), cts, suspend, outputQ),
                     cts,
                     buffer3ForThumbnail,
                     buffer3ForNormal
@@ -64,7 +64,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
 
                 // THIRD TASKs
 
-                PipeLineStep<BitmapWithFilePathAndSeq, BitmapWithFilePathAndSeq>.StartNew(
+                new PipeLineStep<BitmapWithFilePathAndSeq, BitmapWithFilePathAndSeq>(
                     buffer3ForNormal,
                     (
                         BlockingCollection<BitmapWithFilePathAndSeq> inputQ,
@@ -74,7 +74,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                     ) => CreateThumbnail(inputQ, outputQ, cancel),
                     cts,
                     buffer4
-                );
+                ).Start();
 
                 var stage3Normal = f.StartNew(() => SaveBitmap(buffer3ForNormal, outputdir, cts));
 
@@ -141,7 +141,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             }
         }
 
-        private static void RemoveBackground(BlockingCollection<BitmapWithFilePathAndSeq> inputQueue, Bitmap background_bm, CancellationTokenSource cts, params BlockingCollection<BitmapWithFilePathAndSeq>[] outputQueues)
+        private static void RemoveBackground(BlockingCollection<BitmapWithFilePathAndSeq> inputQueue, Bitmap background_bm, CancellationTokenSource cts, CancellationToken suspensionToken, params BlockingCollection<BitmapWithFilePathAndSeq>[] outputQueues)
         {
             CancellationToken token = cts.Token;
             try
@@ -165,6 +165,11 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         var outputObj = input;
                         outputObj.Image = i == 0 ? result : (Bitmap)result.Clone();
                         outputQueues[i].Add(outputObj, token);
+                    }
+
+                    if (suspensionToken.IsCancellationRequested)
+                    {
+                        break;
                     }
                 }
             }
