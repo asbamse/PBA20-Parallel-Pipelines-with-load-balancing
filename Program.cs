@@ -18,12 +18,17 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             LoadAppSettings();
             Console.WriteLine(""); // Seperator
 
-            Console.WriteLine("Executing Simple Automatic Load Balancing Pipeline");
+            Console.WriteLine("Executing all operations sequentially.");
+            MeasureTime(ExecuteSequentialAllOperation);
+            Console.WriteLine("Finished executing all operations sequentially.");
+
+            Console.WriteLine("Executing Simple Pipeline");
+
             try
             {
                 CancellationTokenSource cts = new CancellationTokenSource();
-                MeasureTime(() => SimplePipelineAutomaticLoadBalancing.ExecuteSimpleLoadBalencedPipelineOperation(cts.Token));
-                Console.WriteLine("Finsihed executing Simple Automatic Load Balancing Pipeline");
+                MeasureTime(() => SimplePipeline.ExecuteSimplePipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory, cts.Token));
+                Console.WriteLine("Finished executing Simple Pipeline");
             }
             catch (Exception ex)
             {
@@ -32,38 +37,34 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 Console.WriteLine($"    {ex.Message}");
             }
 
-            //Console.WriteLine("Executing all operations sequentially.");
-            //MeasureTime(ExecuteSequentialAllOperation);
-            //Console.WriteLine("Finished executing all operations sequentially.");
+            Console.WriteLine("Executing Simple Load Balanced Pipeline");
+            try
+            {
+                CancellationTokenSource cts = new CancellationTokenSource();
+                MeasureTime(() => SimplePipelineLoadBalenced.ExecuteSimpleLoadBalencedPipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory, cts.Token));
+                Console.WriteLine("Finsihed executing Simple Load Balanced Pipeline");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine();
+                Console.WriteLine(ex.GetType());
+                Console.WriteLine($"    {ex.Message}");
+            }
 
-            //Console.WriteLine("Executing Simple Pipeline");
+            Console.WriteLine("Executing Test PipelineStep");
+            try
+            {
+                CancellationTokenSource cts = new CancellationTokenSource();
+                MeasureTime(() => TestPipeLineStep.ExecuteTestPipelineStepOperation(InputDirectory, BackgroundFilePath, OutputDirectory, cts.Token));
+                Console.WriteLine("Finsihed executing Test pipeline step");
 
-            //try
-            //{
-            //    CancellationTokenSource cts = new CancellationTokenSource();
-            //    MeasureTime(() => SimplePipeline.ExecuteSimplePipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory, cts.Token));
-            //    Console.WriteLine("Finished executing Simple Pipeline");
-            //}
-            //catch (Exception ex)
-            //{
-            //    Console.WriteLine();
-            //    Console.WriteLine(ex.GetType());
-            //    Console.WriteLine($"    {ex.Message}");
-            //}
-
-            //Console.WriteLine("Executing Simple Load Balanced Pipeline");
-            //try
-            //{
-            //    CancellationTokenSource cts = new CancellationTokenSource();
-            //    MeasureTime(() => SimplePipelineLoadBalenced.ExecuteSimpleLoadBalencedPipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory, cts.Token));
-            //    Console.WriteLine("Finsihed executing Simple Load Balanced Pipeline");
-            //}
-            //catch (Exception ex)
-            //{
-            //    Console.WriteLine();
-            //    Console.WriteLine(ex.GetType());
-            //    Console.WriteLine($"    {ex.Message}");
-            //}
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine();
+                Console.WriteLine(ex.GetType());
+                Console.WriteLine($"    {ex.Message}");
+            }
         }
 
         /// <summary>

@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 
 namespace PBA20_Parallel_Pipelines_with_load_balancing
 {
@@ -17,9 +18,9 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
         // Constructor InputQueue, OutputQueue, Action
         // TODO Find out how to add the TaskQueue til Action
 
-        Task Start();
         Task AddTask();
         bool RemoveTask(); // Only return after Task Removal
         int TaskAmount();
+        Task Start();
     }
 }
