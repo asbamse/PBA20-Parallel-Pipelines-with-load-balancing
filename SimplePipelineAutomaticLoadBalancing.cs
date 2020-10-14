@@ -2,15 +2,24 @@
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace PBA20_Parallel_Pipelines_with_load_balancing
 {
     public class SimplePipelineAutomaticLoadBalancing
     {
         static int BUFFER_SIZE = 10000;
+        static int TASK_DISTRIBUTION_SLEEP = 100;
 
         public static void ExecuteSimpleLoadBalencedPipelineOperation(CancellationToken token)
         {
+            int max_task_count = (int)Math.Log(Environment.ProcessorCount, 2) + 4;
+
+            // Task to handle task balancing
+            // - While loop
+            // - 
+
             var buffer1 = new BlockingCollection<SeqObject<int>>(BUFFER_SIZE);
 
             var bufferForTimesTwo = new BlockingCollection<SeqObject<int>>(BUFFER_SIZE);
@@ -18,14 +27,21 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             using (CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(token))
             {
                 var f = new TaskFactory(TaskCreationOptions.LongRunning, TaskContinuationOptions.None);
+                List<TaskPipelineStep<SeqObject<int>>> taskPipelineSteps = new List<TaskPipelineStep<SeqObject<int>>>();
 
                 // FIRST STEP
                 PipelineStep_GenerateNumbers ps_gn = new PipelineStep_GenerateNumbers(buffer1, cts);
-                Task step1 = f.StartNew(() => ps_gn.Start());
+                Task step1 = ps_gn.Start();
 
                 // SECOND STEP
                 PipelineStep_TimesTwo ps_tt = new PipelineStep_TimesTwo(buffer1, cts, bufferForTimesTwo);
-                Task step2 = f.StartNew(() => ps_tt.Start());
+                Task step2 = ps_tt.Start();
+                taskPipelineSteps.Add(new TaskPipelineStep<SeqObject<int>>()
+                {
+                    PipelineStep = ps_tt,
+                    Tasks = new List<Task>() { step2 },
+                    Queue = buffer1,
+                });
 
                 // THIRD STEP
                 //PipelineStep_DisplayAll ps_da = new PipelineStep_DisplayAll(bufferForTimesTwo, cts);
@@ -33,7 +49,39 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
 
                 try
                 {
-                    Task.WaitAll(step1, step2);
+                    while (!(taskPipelineSteps is null) && taskPipelineSteps.Count > 0 && !taskPipelineSteps.SelectMany(x => x.Tasks).All(x => x.IsCompleted))
+                    {
+                        int tasksAvailable = max_task_count - taskPipelineSteps.Sum(x => x.Queue.IsCompleted ? 0 : x.PipelineStep.TaskAmount());
+
+
+                        if (tasksAvailable == 0 && taskPipelineSteps.Count(x => !x.Queue.IsCompleted) > 1)
+                        {
+                            var stepToAffect = taskPipelineSteps
+                                .Where(x => !x.Queue.IsCompleted && x.PipelineStep.TaskAmount() > 1)
+                                .OrderBy(x => x.Queue.Count / x.PipelineStep.TaskAmount())
+                                .FirstOrDefault();
+                            if (!(stepToAffect is null))
+                            {
+                                stepToAffect.PipelineStep.RemoveTask();
+                            }
+                        }
+                        if (tasksAvailable > 0)
+                        {
+                            var stepToAffect = taskPipelineSteps
+                                .Where(x => !x.Queue.IsCompleted && x.PipelineStep.TaskAmount() > 0)
+                                .OrderByDescending(x => x.Queue.Count / x.PipelineStep.TaskAmount())
+                                .FirstOrDefault();
+                            if(!(stepToAffect is null))
+                            {
+                                stepToAffect.PipelineStep.AddTask();
+                            }
+                        } 
+
+                        if(tasksAvailable == 0)
+                        {
+                            Thread.Sleep(TASK_DISTRIBUTION_SLEEP);
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -49,6 +97,13 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             }
         }
 
+        private class TaskPipelineStep<T>
+        {
+            public List<Task> Tasks { get; set; }
+            public IPipelineStep PipelineStep { get; set; }
+            public BlockingCollection<T> Queue { get; set; }
+        }
+
         private class PipelineStep_GenerateNumbers : IPipelineStep
         {
             public BlockingCollection<SeqObject<int>> Output { get; set; }
@@ -61,23 +116,19 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 Cts = cts;
             }
 
-            public void Start()
+            public Task Start()
             {
                 if (Tasks == 0)
                 {
-                    GenerateNumbers();
+                    return (new TaskFactory()).StartNew(() => { GenerateNumbers(); });
                 }
                 Tasks = 1;
+                return null;
             }
 
-            public bool AddTask()
+            public Task AddTask()
             {
-                return true;
-            }
-
-            public int QueueFillLevel()
-            {
-                return 0;
+                return null;
             }
 
             public bool RemoveTask()
@@ -144,27 +195,25 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 Output = output;
             }
 
-            public void Start()
+            public Task Start()
             {
                 if (Tasks == 0)
                 {
-                    TimesTwo();
+                    Tasks = 1;
+                    return (new TaskFactory()).StartNew(() => { TimesTwo(); });
                 }
-                Tasks = 1;
+                return null;
             }
 
-            public bool AddTask()
+            public Task AddTask()
             {
-                return true;
-            }
-
-            public int QueueFillLevel()
-            {
-                return 0;
+                Tasks += 1;
+                return (new TaskFactory()).StartNew(() => { TimesTwo(); });
             }
 
             public bool RemoveTask()
             {
+                Tasks -= 1;
                 return true;
             }
 
@@ -229,23 +278,19 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 Cts = cts;
             }
 
-            public void Start()
+            public Task Start()
             {
                 if (Tasks == 0)
                 {
-                    DisplayAll();
+                    return (new TaskFactory()).StartNew(() => { DisplayAll(); });
                 }
                 Tasks = 1;
+                return null;
             }
 
-            public bool AddTask()
+            public Task AddTask()
             {
-                return true;
-            }
-
-            public int QueueFillLevel()
-            {
-                return 0;
+                return null;
             }
 
             public bool RemoveTask()
