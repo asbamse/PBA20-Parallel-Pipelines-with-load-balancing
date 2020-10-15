@@ -28,7 +28,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 var stage1 = f.StartNew(() => LoadImages(inputDirectory, buffer1, cts));
 
                 // SECOND TASK
-                var stage2 = f.StartNew(() => RemoveBackground(buffer1, (Bitmap)background_bm.Clone(), new []{ buffer2ForNormal, buffer2ForThumbnail }, cts));
+                var stage2 = f.StartNew(() => RemoveBackground(buffer1, background_bm, new[] { buffer2ForNormal, buffer2ForThumbnail }, cts));
 
                 // THIRD TASKs
                 var stage3Normal = f.StartNew(() => SaveBitmap(buffer2ForNormal, outputdir, cts));
@@ -107,20 +107,26 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         break;
                     }
 
-                    var result = ImageProcessor.RemoveBackground(input.Image, background_bm);
-                    for (int i = 0; i < outputQueues.Length; i++)
+                    lock (input.Image)
                     {
-                        if (token.IsCancellationRequested)
+                        lock (background_bm)
                         {
-                            break;
-                        }
+                            var result = ImageProcessor.RemoveBackground(input.Image, background_bm);
+                            for (int i = 0; i < outputQueues.Length; i++)
+                            {
+                                if (token.IsCancellationRequested)
+                                {
+                                    break;
+                                }
 
-                        var outputObj = new BitmapWithFilePath()
-                        {
-                            FilePath = input.FilePath,
-                            Image = i == 0 ? result : (Bitmap)result.Clone()
-                        };
-                        outputQueues[i].Add(outputObj, token);
+                                var outputObj = new BitmapWithFilePath()
+                                {
+                                    FilePath = input.FilePath,
+                                    Image = (Bitmap)result.Clone()
+                                };
+                                outputQueues[i].Add(outputObj, token);
+                            }
+                        }
                     }
                 }
             }
@@ -218,9 +224,9 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                     ImageProcessor.SaveBitmapToFile(input.Image, output);
                 }
             }
-            catch (Exception ex) 
+            catch (Exception ex)
             {
-                if(!(ex is OperationCanceledException))
+                if (!(ex is OperationCanceledException))
                 {
                     cts.Cancel();
                     throw;

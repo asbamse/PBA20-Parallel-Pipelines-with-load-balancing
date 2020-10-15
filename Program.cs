@@ -21,14 +21,15 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             Console.WriteLine("Executing all operations sequentially.");
             MeasureTime(ExecuteSequentialAllOperation);
             Console.WriteLine("Finished executing all operations sequentially.");
+            Console.WriteLine(""); // Seperator
 
             Console.WriteLine("Executing Simple Pipeline");
-
             try
             {
                 CancellationTokenSource cts = new CancellationTokenSource();
                 MeasureTime(() => SimplePipeline.ExecuteSimplePipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory, cts.Token));
                 Console.WriteLine("Finished executing Simple Pipeline");
+                Console.WriteLine(""); // Seperator
             }
             catch (Exception ex)
             {
@@ -43,6 +44,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 CancellationTokenSource cts = new CancellationTokenSource();
                 MeasureTime(() => SimplePipelineLoadBalenced.ExecuteSimpleLoadBalencedPipelineOperation(InputDirectory, BackgroundFilePath, OutputDirectory, cts.Token));
                 Console.WriteLine("Finsihed executing Simple Load Balanced Pipeline");
+                Console.WriteLine(""); // Seperator
             }
             catch (Exception ex)
             {
@@ -57,6 +59,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 CancellationTokenSource cts = new CancellationTokenSource();
                 MeasureTime(() => TestPipeLineStep.ExecuteTestPipelineStepOperation(InputDirectory, BackgroundFilePath, OutputDirectory, cts.Token));
                 Console.WriteLine("Finsihed executing Test pipeline step");
+                Console.WriteLine(""); // Seperator
             }
             catch (Exception ex)
             {

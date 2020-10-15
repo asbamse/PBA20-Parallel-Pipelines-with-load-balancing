@@ -6,7 +6,6 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Threading;
-using System.Security.Cryptography.X509Certificates;
 
 namespace PBA20_Parallel_Pipelines_with_load_balancing
 {
@@ -65,7 +64,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         BlockingCollection<BitmapWithFilePathAndSeq> outputQ,
                         CancellationToken suspend,
                         CancellationTokenSource cancel
-                    ) => RemoveBackground(inputQ, (Bitmap)background_bm.Clone(), cts, suspend, outputQ),
+                    ) => RemoveBackground(inputQ, background_bm, cts, suspend, outputQ),
                     cts,
                     buffer3ForThumbnail,
                     buffer3ForNormal
@@ -144,7 +143,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
             int max_task_count = (int)Math.Max(Environment.ProcessorCount * 4, pipelineSteps.Count * 2);
 
             // While tasks are not completed.
-            while ((nonParallelTasks.Count > 0 && nonParallelTasks.All(x => !x.IsCompleted)) || (!pipelineSteps.Where(x => x.Tasks.Count > 0).SelectMany(x => x.Tasks).All(x => x.IsCompleted)))
+            while ((nonParallelTasks.Count > 0 && nonParallelTasks.All(x => !x.IsCompleted)) || (!pipelineSteps.Where(x => x.Tasks.Count > 0).SelectMany(x => x.Tasks).Where(x => !(x is null)).All(x => x.IsCompleted)))
             {
                 // only manage steps is available.
                 if (pipelineSteps.Count > 0)
@@ -164,7 +163,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         if (!(stepToAffect is null))
                         {
                             stepToAffect.PipelineStep.RemoveTask();
-                            Console.WriteLine($"Removed task from {stepToAffect.Name} which has {stepToAffect.PipelineStep.TaskAmount()} tasks");
+                            //Console.WriteLine($"Removed task from {stepToAffect.Name} which has {stepToAffect.PipelineStep.TaskAmount()} tasks");
                             tasksAvailable = max_task_count - pipelineSteps.Sum(x => x.Queue.IsCompleted ? 0 : x.PipelineStep.TaskAmount());
                         }
                     }
@@ -181,7 +180,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         if (!(stepToAffect is null))
                         {
                             stepToAffect.Tasks.Add(stepToAffect.PipelineStep.AddTask());
-                            Console.WriteLine($"Added task to {stepToAffect.Name} which has {stepToAffect.PipelineStep.TaskAmount()} tasks");
+                            //Console.WriteLine($"Added task to {stepToAffect.Name} which has {stepToAffect.PipelineStep.TaskAmount()} tasks");
                         }
                     }
 
@@ -192,12 +191,12 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                     }
                 }
             }
-            
+
             if (nonParallelTasks.Any(x => !(x.Exception is null)))
             {
                 throw nonParallelTasks.FirstOrDefault(x => !(x.Exception is null)).Exception;
             }
-            if (pipelineSteps.Where(x => x.Tasks.Count > 0).SelectMany(x => x.Tasks).Any(x => !(x.Exception is null)))
+            if (pipelineSteps.Where(x => x.Tasks.Count > 0).SelectMany(x => x.Tasks).Where(x => !(x is null)).Any(x => !(x.Exception is null)))
             {
                 throw pipelineSteps.Where(x => x.Tasks.Count > 0).SelectMany(x => x.Tasks).FirstOrDefault(x => !(x.Exception is null)).Exception;
             }
@@ -256,21 +255,27 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         break;
                     }
 
-                    var result = ImageProcessor.RemoveBackground(input.Image, background_bm);
-
-                    for (int i = 0; i < outputQueues.Length; i++)
+                    lock (input.Image)
                     {
-                        if (token.IsCancellationRequested)
+                        lock (background_bm)
                         {
-                            break;
-                        }
+                            var result = ImageProcessor.RemoveBackground(input.Image, background_bm);
 
-                        outputQueues[i].Add(new BitmapWithFilePathAndSeq()
-                        {
-                            FilePath = input.FilePath,
-                            Image = (Bitmap)result.Clone(),
-                            SeqId = input.SeqId,
-                        }, token);
+                            for (int i = 0; i < outputQueues.Length; i++)
+                            {
+                                if (token.IsCancellationRequested)
+                                {
+                                    break;
+                                }
+
+                                outputQueues[i].Add(new BitmapWithFilePathAndSeq()
+                                {
+                                    FilePath = input.FilePath,
+                                    Image = (Bitmap)result.Clone(),
+                                    SeqId = input.SeqId,
+                                }, token);
+                            }
+                        }
                     }
 
                     if (suspensionToken.IsCancellationRequested)
@@ -307,14 +312,18 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                     {
                         break;
                     }
-                    var result = ImageProcessor.ResizeToThumbnail(input.Image);
 
-                    outputQueue.Add(new BitmapWithFilePathAndSeq()
+                    lock(input.Image)
                     {
-                        FilePath = input.FilePath,
-                        Image = (Bitmap)result.Clone(),
-                        SeqId = input.SeqId,
-                    }, token);
+                        var result = ImageProcessor.ResizeToThumbnail(input.Image);
+
+                        outputQueue.Add(new BitmapWithFilePathAndSeq()
+                        {
+                            FilePath = input.FilePath,
+                            Image = (Bitmap)result.Clone(),
+                            SeqId = input.SeqId,
+                        }, token);
+                    }
                 }
             }
             catch (Exception ex)
@@ -343,8 +352,11 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         break;
                     }
 
-                    string output_thumb = outputdir + Path.DirectorySeparatorChar + Path.GetFileNameWithoutExtension(input.FilePath) + "_thumbnail" + Path.GetExtension(input.FilePath);
-                    ImageProcessor.SaveBitmapToFile(input.Image, output_thumb);
+                    lock (input.Image)
+                    {
+                        string output_thumb = outputdir + Path.DirectorySeparatorChar + Path.GetFileNameWithoutExtension(input.FilePath) + "_thumbnail" + Path.GetExtension(input.FilePath);
+                        ImageProcessor.SaveBitmapToFile(input.Image, output_thumb);
+                    }
                 }
             }
             catch (Exception ex)
@@ -369,8 +381,11 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         break;
                     }
 
-                    string output = outputdir + Path.DirectorySeparatorChar + Path.GetFileName(input.FilePath);
-                    ImageProcessor.SaveBitmapToFile(input.Image, output);
+                    lock (input.Image)
+                    {
+                        string output = outputdir + Path.DirectorySeparatorChar + Path.GetFileName(input.FilePath);
+                        ImageProcessor.SaveBitmapToFile(input.Image, output);
+                    }
                 }
             }
             catch (Exception ex)
