@@ -9,7 +9,7 @@ using System.Threading;
 
 namespace PBA20_Parallel_Pipelines_with_load_balancing
 {
-    public class TestPipeLineStep
+    public class AutomatedLoadBalancingPipeline
     {
         private class TaskPipelineStep<T>
         {
@@ -313,7 +313,7 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                         break;
                     }
 
-                    lock(input.Image)
+                    lock (input.Image)
                     {
                         var result = ImageProcessor.ResizeToThumbnail(input.Image);
 

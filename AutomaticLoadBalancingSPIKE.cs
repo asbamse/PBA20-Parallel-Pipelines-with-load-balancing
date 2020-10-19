@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace PBA20_Parallel_Pipelines_with_load_balancing
 {
-    public class SimplePipelineAutomaticLoadBalancing
+    public class AutomaticLoadBalancingSPIKE
     {
         static int BUFFER_SIZE = 10000;
         static int TASK_DISTRIBUTION_SLEEP = 100;
@@ -67,13 +67,13 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                                 .Where(x => !x.Queue.IsCompleted && x.PipelineStep.TaskAmount() > 0)
                                 .OrderByDescending(x => x.Queue.Count / x.PipelineStep.TaskAmount())
                                 .FirstOrDefault();
-                            if(!(stepToAffect is null))
+                            if (!(stepToAffect is null))
                             {
                                 stepToAffect.PipelineStep.AddTask();
                             }
-                        } 
+                        }
 
-                        if(tasksAvailable == 0)
+                        if (tasksAvailable == 0)
                         {
                             Thread.Sleep(TASK_DISTRIBUTION_SLEEP);
                         }

@@ -53,12 +53,12 @@ namespace PBA20_Parallel_Pipelines_with_load_balancing
                 Console.WriteLine($"    {ex.Message}");
             }
 
-            Console.WriteLine("Executing Test PipelineStep");
+            Console.WriteLine("Executing Pipeline with Automated load balancing");
             try
             {
                 CancellationTokenSource cts = new CancellationTokenSource();
-                MeasureTime(() => TestPipeLineStep.ExecuteTestPipelineStepOperation(InputDirectory, BackgroundFilePath, OutputDirectory, cts.Token));
-                Console.WriteLine("Finsihed executing Test pipeline step");
+                MeasureTime(() => AutomatedLoadBalancingPipeline.ExecuteTestPipelineStepOperation(InputDirectory, BackgroundFilePath, OutputDirectory, cts.Token));
+                Console.WriteLine("Finsihed executing Pipeline with Automated load balancing");
                 Console.WriteLine(""); // Seperator
             }
             catch (Exception ex)
